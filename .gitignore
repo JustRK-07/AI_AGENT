@@ -1,20 +1,266 @@
-# Ignore everything at the root level
-/*
+# ==============================================
+# ENVIRONMENT & CONFIGURATION FILES
+# ==============================================
+# CRITICAL: Never commit these files - they contain secrets!
+.env
+.env.*
+!.env.example
+!.env.template
+*.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
 
-# But don't ignore the latest directory
-!latest/
+# Configuration files that may contain secrets
+config.local.*
+*.config.local.*
+gcp-config.sh
+**/gcp-config.sh
 
-# Ignore everything inside latest
-latest/*
+# ==============================================
+# DEPENDENCIES & PACKAGES
+# ==============================================
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+package-lock.json.bak
+.yarn/
+.pnp.*
 
-# But don't ignore core-worker
-!latest/core-worker/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+*.egg
 
-# Don't ignore this .gitignore file itself
-!.gitignore
+# ==============================================
+# DATABASE FILES
+# ==============================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+dev.db*
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/migration_lock.toml
+*.sql.backup
 
-# Ignore web-ui_new completely
-web-ui_new/
+# ==============================================
+# LOG FILES
+# ==============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+combined.log
+error.log
+exceptions.log
 
-# Ignore .claude directory
-.claude/
+# ==============================================
+# OPERATING SYSTEM FILES
+# ==============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+__MACOSX/
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ==============================================
+# IDE & EDITOR FILES
+# ==============================================
+# VSCode
+.vscode/
+!.vscode/settings.json.example
+!.vscode/extensions.json.example
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ==============================================
+# BUILD & COMPILED FILES
+# ==============================================
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# ==============================================
+# TEMPORARY FILES
+# ==============================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.backup
+.cache/
+
+# ==============================================
+# SENSITIVE DEPLOYMENT FILES
+# ==============================================
+# Deployment scripts with secrets
+deploy-*.sh
+!deploy-*.sh.template
+**/deploy-*.sh
+!**/deploy-*.sh.template
+
+# Cloud Build & GCP
+cloudbuild.yaml
+!cloudbuild.yaml.template
+.gcloudignore
+service-account-key*.json
+*.pem
+*.key
+*.cert
+*.crt
+
+# Kubernetes & Docker secrets
+secrets.yaml
+*-secrets.yaml
+docker-compose.override.yml
+
+# ==============================================
+# SECURITY & KEYS
+# ==============================================
+# Private keys
+*.private.key
+*.privatekey
+private.key
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# Certificates
+*.p12
+*.pfx
+*.cer
+
+# Credentials
+credentials.json
+*credentials*.json
+auth.json
+
+# ==============================================
+# TESTING
+# ==============================================
+coverage/
+.nyc_output/
+test-results/
+*.lcov
+
+# ==============================================
+# MISC
+# ==============================================
+# Yarn
+.yarn/*
+!.yarn/cache
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Turbo
+.turbo
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# ==============================================
+# PROJECT SPECIFIC
+# ==============================================
+# Agent deployment files (may contain credentials)
+agent-deployments/deploy-*.sh
+agent-deployments/.env*
+!agent-deployments/.env.example
+
+# Worker environment files
+core-worker/.env*
+!core-worker/.env.template
+!core-worker/.env.example
+
+# Backend environment files
+backend/.env*
+!backend/.env.example
+backend/.env.yaml
+backend/prisma/dev.db*
+
+# Landing page environment files
+landing/.env*
+!landing/.env.example
+
+# Web UI environment files
+web-ui*/.env*
+!web-ui*/.env.example
+
+# Test files with hardcoded credentials
+test-create-room.js
+**/test-*.js
+!**/test-*.spec.js
+!**/test-*.test.js
