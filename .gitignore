@@ -1,0 +1,20 @@
+# Ignore everything at the root level
+/*
+
+# But don't ignore the latest directory
+!latest/
+
+# Ignore everything inside latest
+latest/*
+
+# But don't ignore core-worker
+!latest/core-worker/
+
+# Don't ignore this .gitignore file itself
+!.gitignore
+
+# Ignore web-ui_new completely
+web-ui_new/
+
+# Ignore .claude directory
+.claude/
