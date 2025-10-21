@@ -1,0 +1,126 @@
+/* Gentelella Panel Styles */
+
+.x_panel {
+  position: relative;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+}
+
+.x_title {
+  position: relative;
+  margin-bottom: 0;
+  min-height: 40px;
+}
+
+.x_title h2 {
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.x_title small {
+  font-weight: normal;
+  opacity: 0.7;
+}
+
+.x_content {
+  position: relative;
+}
+
+/* Panel Toolbox */
+.panel_toolbox {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.panel_toolbox li {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+
+.panel_toolbox > li > button,
+.panel_toolbox > li > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+/* Collapse Link */
+.collapse-link {
+  position: relative;
+}
+
+.collapse-link svg {
+  transition: transform 0.3s ease;
+}
+
+/* Close Link */
+.close-link:hover {
+  color: #e74c3c !important;
+}
+
+/* Smooth Transitions */
+.x_panel {
+  transition: all 0.3s ease-in-out;
+}
+
+.x_content {
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+/* Animation Keyframes */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes collapse {
+  from {
+    max-height: 10000px;
+    opacity: 1;
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes expand {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 10000px;
+    opacity: 1;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .x_title {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .panel_toolbox {
+    margin-top: 8px;
+  }
+}

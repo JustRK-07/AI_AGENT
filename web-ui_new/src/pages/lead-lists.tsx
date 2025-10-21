@@ -1,0 +1,984 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import Head from "next/head";
+import { gobiService, type LeadList as LeadListType } from "@/services/gobiService";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { StatCard } from "@/components/shared/StatCard";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
+  Users, 
+  Plus, 
+  Search, 
+  Filter, 
+  MoreVertical,
+  Upload,
+  Download,
+  Edit,
+  Trash2,
+  Link,
+  UserPlus,
+  Mail,
+  Phone,
+  CheckCircle,
+  XCircle,
+  Clock,
+  FileSpreadsheet,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Eye,
+} from "lucide-react";
+import { toast } from "sonner";
+import { SkeletonCard, SkeletonTable } from "@/components/skeletons";
+
+// Using LeadList type from gobiService
+type LeadList = LeadListType;
+
+type Lead = {
+  id: string;
+  phoneNumber: string;
+  name?: string;
+  email?: string;
+  status: "PENDING" | "PROCESSED" | "FAILED";
+  errorReason?: string;
+  createdAt: Date;
+};
+
+export default function LeadLists() {
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selectedList, setSelectedList] = useState<LeadList | null>(null);
+  const [newListName, setNewListName] = useState("");
+  const [newListDescription, setNewListDescription] = useState("");
+  const [newListCsvFile, setNewListCsvFile] = useState<File | null>(null);
+  const [editListName, setEditListName] = useState("");
+  const [editListDescription, setEditListDescription] = useState("");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // State for API calls
+  const [leadLists, setLeadLists] = useState<LeadList[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [listDetails, setListDetails] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch data on component mount
+  useEffect(() => {
+    // Only fetch on client side
+    if (typeof window !== 'undefined') {
+      fetchLeadLists();
+      fetchCampaigns();
+    }
+  }, []);
+
+  // Fetch list details when dialog opens
+  useEffect(() => {
+    // Only fetch on client side
+    if (typeof window !== 'undefined' && selectedList && viewDialogOpen) {
+      fetchListDetails(selectedList.id);
+    }
+  }, [selectedList, viewDialogOpen]);
+
+  const fetchLeadLists = async () => {
+    try {
+      setIsLoading(true);
+
+      // Add minimum loading delay for smooth UX
+      const [response] = await Promise.all([
+        gobiService.leadLists.getAll(),
+        new Promise(resolve => setTimeout(resolve, 600))
+      ]);
+
+      // Ensure leadLists is always an array
+      setLeadLists(Array.isArray(response) ? response : []);
+    } catch (error: any) {
+      console.error('Error fetching lead lists:', error);
+      toast.error('Failed to fetch lead lists');
+      setLeadLists([]); // Set empty array on error
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchCampaigns = async () => {
+    try {
+      const response = await gobiService.campaigns.getAll();
+      setCampaigns(response.data || []);
+    } catch (error: any) {
+      console.error('Error fetching campaigns:', error);
+    }
+  };
+
+  const fetchListDetails = async (listId: string) => {
+    try {
+      const response = await gobiService.leadLists.getDetails(listId);
+      setListDetails(response);
+    } catch (error: any) {
+      console.error('Error fetching list details:', error);
+      toast.error('Failed to fetch list details');
+    }
+  };
+
+  const handleCreateList = async () => {
+    if (!newListName.trim()) {
+      toast.error("Please enter a list name");
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Step 1: Create the lead list
+      console.log("Creating lead list:", newListName);
+      const response = await gobiService.leadLists.create({
+        name: newListName,
+        description: newListDescription || undefined,
+      });
+
+      console.log("Lead list created:", response);
+      const listId = response?.id;
+
+      if (!listId) {
+        throw new Error("Failed to get list ID from response");
+      }
+
+      toast.success("Lead list created successfully!");
+
+      // Step 2: If CSV file is provided, upload leads
+      if (newListCsvFile) {
+        try {
+          console.log("Uploading CSV file:", newListCsvFile.name);
+          const reader = new FileReader();
+          const csvContent = await new Promise<string>((resolve, reject) => {
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.onerror = reject;
+            reader.readAsText(newListCsvFile);
+          });
+
+          console.log("CSV content read, uploading to list:", listId);
+          const uploadResponse = await gobiService.leadLists.uploadLeads({
+            listId: listId,
+            content: csvContent,
+          });
+
+          console.log("Upload response:", uploadResponse);
+          const leadsUploaded = uploadResponse?.newLeads || 0;
+
+          toast.success(
+            `Successfully uploaded ${leadsUploaded} leads to the list!`
+          );
+
+          // Navigate to detail page to show uploaded leads
+          console.log("Navigating to list detail page:", listId);
+          router.push(`/lead-lists/${listId}`);
+        } catch (uploadError: any) {
+          console.error("CSV upload error:", uploadError);
+          toast.error(`List created but CSV upload failed: ${uploadError.message}`);
+          // Still navigate to list page even if upload fails
+          router.push(`/lead-lists/${listId}`);
+        }
+      } else {
+        // No CSV file, just refresh the list
+        await fetchLeadLists();
+      }
+
+      // Reset form
+      setNewListName("");
+      setNewListDescription("");
+      setNewListCsvFile(null);
+      setCreateDialogOpen(false);
+    } catch (error: any) {
+      console.error("Create list error:", error);
+      toast.error(`Failed to create list: ${error.message}`);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleUploadCSV = async () => {
+    if (!csvFile || !selectedList) {
+      toast.error("Please select a file and list");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      console.log("Uploading CSV to list:", selectedList.id);
+      const reader = new FileReader();
+      const csvContent = await new Promise<string>((resolve, reject) => {
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsText(csvFile);
+      });
+
+      console.log("CSV content read, uploading...");
+      const response = await gobiService.leadLists.uploadLeads({
+        listId: selectedList.id,
+        content: csvContent,
+      });
+
+      console.log("Upload response:", response);
+      const leadsUploaded = response?.newLeads || 0;
+
+      toast.success(`Successfully uploaded ${leadsUploaded} leads!`);
+
+      // Reset state
+      setCsvFile(null);
+      setUploadDialogOpen(false);
+      const listId = selectedList.id;
+      setSelectedList(null);
+
+      // Refresh list data
+      await fetchLeadLists();
+
+      // Navigate to detail page to show uploaded leads
+      console.log("Navigating to list detail page:", listId);
+      router.push(`/lead-lists/${listId}`);
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast.error(`Failed to upload leads: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleEditList = (list: LeadList) => {
+    setSelectedList(list);
+    setEditListName(list.name);
+    setEditListDescription(list.description || "");
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateList = async () => {
+    if (!selectedList || !editListName.trim()) {
+      toast.error("Please enter a list name");
+      return;
+    }
+
+    setIsEditing(true);
+    try {
+      await gobiService.leadLists.update(selectedList.id, {
+        name: editListName,
+        description: editListDescription || undefined,
+      });
+      toast.success("Lead list updated successfully!");
+      setEditDialogOpen(false);
+      setSelectedList(null);
+      setEditListName("");
+      setEditListDescription("");
+      await fetchLeadLists();
+    } catch (error: any) {
+      toast.error(`Failed to update list: ${error.message}`);
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
+  const handleDeleteList = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await gobiService.leadLists.delete(id);
+      toast.success("Lead list deleted successfully!");
+      await fetchLeadLists();
+    } catch (error: any) {
+      toast.error(`Failed to delete list: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Stats calculations with defensive checks
+  const totalLists = Array.isArray(leadLists) ? leadLists.length : 0;
+  const totalLeads = Array.isArray(leadLists)
+    ? leadLists.reduce((sum, list) => sum + (list._count?.leads || 0), 0)
+    : 0;
+  const processedLeads = 0; // This would need to be calculated from lead status in gobi-main
+  const pendingLeads = totalLeads - processedLeads;
+
+  // Filter lists with defensive array check
+  const filteredLists = Array.isArray(leadLists)
+    ? leadLists.filter((list) => {
+        const matchesSearch = list.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             list.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        if (statusFilter === "ALL") return matchesSearch;
+        if (statusFilter === "ACTIVE") return matchesSearch && (list.assignedCampaigns?.length || 0) > 0;
+        if (statusFilter === "INACTIVE") return matchesSearch && (list.assignedCampaigns?.length || 0) === 0;
+        return matchesSearch;
+      })
+    : [];
+
+  // Pagination with defensive checks
+  const totalPages = Math.ceil((filteredLists.length || 0) / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedLists = filteredLists.slice(startIndex, endIndex);
+
+  return (
+    <>
+      <Head>
+        <title>Lead Lists</title>
+        <meta name="description" content="Lead List Management" />
+      </Head>
+      <div className="min-h-screen bg-gray-50">
+        <div className="w-full max-w-[1600px] mx-auto px-8 py-4 space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">Lead Lists</h1>
+                </div>
+              </div>
+            </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => fetchLeadLists()}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create List
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Lead List</DialogTitle>
+                  <DialogDescription>
+                    Create a new list to organize your leads. Optionally upload a CSV file with leads.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <Label>List Name *</Label>
+                    <Input
+                      placeholder="Enter list name"
+                      value={newListName}
+                      onChange={(e) => setNewListName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Description (Optional)</Label>
+                    <Textarea
+                      placeholder="Enter list description"
+                      value={newListDescription}
+                      onChange={(e) => setNewListDescription(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="border-t pt-4">
+                    <Label className="flex items-center gap-2 mb-2">
+                      <Upload className="h-4 w-4" />
+                      Upload Leads (Optional)
+                    </Label>
+                    <Input
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Validate file size (max 10MB)
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast.error('File size must be less than 10MB');
+                            e.target.value = '';
+                            return;
+                          }
+                          // Validate file extension
+                          if (!file.name.toLowerCase().endsWith('.csv')) {
+                            toast.error('Please upload a CSV file');
+                            e.target.value = '';
+                            return;
+                          }
+                          setNewListCsvFile(file);
+                          toast.success(`Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+                        }
+                      }}
+                      className="cursor-pointer"
+                    />
+                    {newListCsvFile && (
+                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-green-800">
+                            <FileSpreadsheet className="h-4 w-4" />
+                            <div>
+                              <p className="font-medium">{newListCsvFile.name}</p>
+                              <p className="text-xs text-green-600">{(newListCsvFile.size / 1024).toFixed(1)} KB</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setNewListCsvFile(null);
+                              toast.info('File removed');
+                            }}
+                            className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-100 transition-colors"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs font-semibold text-blue-900 mb-2">CSV Format Requirements:</p>
+                      <ul className="text-xs text-blue-800 space-y-1">
+                        <li>• <strong>phoneNumber</strong> (required) - Must include country code</li>
+                        <li>• <strong>name</strong> (optional) - Contact name</li>
+                        <li>• <strong>email</strong> (optional) - Contact email</li>
+                      </ul>
+                      <p className="text-xs text-blue-600 mt-2">Example: +1234567890, John Doe, john@example.com</p>
+                      <p className="text-xs text-blue-600 mt-1 font-medium">Max file size: 10MB</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setCreateDialogOpen(false);
+                        setNewListName("");
+                        setNewListDescription("");
+                        setNewListCsvFile(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateList} disabled={isCreating}>
+                      {isCreating ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          {newListCsvFile ? "Creating & Uploading..." : "Creating..."}
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create List
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        {/* Compact Stats Cards */}
+        {isLoading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-in">
+            <StatCard
+              icon={<FileSpreadsheet className="h-6 w-6" />}
+              label="Total Lists"
+              value={totalLists}
+              iconBgColor="bg-gray-100"
+              iconColor="text-gray-600"
+            />
+            <StatCard
+              icon={<Users className="h-6 w-6" />}
+              label="Total Leads"
+              value={totalLeads}
+              iconBgColor="bg-blue-100"
+              iconColor="text-blue-600"
+            />
+            <StatCard
+              icon={<CheckCircle className="h-6 w-6" />}
+              label="Processed"
+              value={processedLeads}
+              iconBgColor="bg-green-100"
+              iconColor="text-green-600"
+            />
+            <StatCard
+              icon={<Clock className="h-6 w-6" />}
+              label="Pending"
+              value={pendingLeads}
+              iconBgColor="bg-yellow-100"
+              iconColor="text-yellow-600"
+            />
+          </div>
+        )}
+
+        {/* Table Section */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="border-b bg-gray-50/50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg">Lead Lists</CardTitle>
+                <CardDescription className="text-xs">
+                  Organize and manage your contact lists
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-initial">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search lists..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 h-9 w-full sm:w-64"
+                  />
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-32 h-9">
+                    <SelectValue placeholder="Filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Lists</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6">
+                <SkeletonTable rows={5} columns={7} />
+              </div>
+            ) : filteredLists?.length === 0 ? (
+              <div className="text-center py-12">
+                <FileSpreadsheet className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No lead lists found</p>
+                <p className="text-sm text-gray-400 mt-1">Create your first list to get started</p>
+              </div>
+            ) : (
+              <div className="animate-fade-in">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>List Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Total Leads</TableHead>
+                      <TableHead>Processed</TableHead>
+                      <TableHead>Campaigns</TableHead>
+                      <TableHead>Created Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedLists?.map((list) => (
+                      <TableRow key={list.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <FileSpreadsheet className="h-4 w-4 text-gray-400" />
+                            <button
+                              onClick={() => router.push(`/lead-lists/${list.id}`)}
+                              className="hover:text-blue-600 hover:underline text-left"
+                            >
+                              {list.name}
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-600">
+                            {list.description || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-3 w-3 text-gray-400" />
+                            <span className="text-sm font-medium">{list._count?.leads || 0}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-green-500 h-2 rounded-full"
+                                style={{ width: `0%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-600">
+                              0/{list._count?.leads || 0}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {(list.assignedCampaigns?.length || 0) > 0 ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <Link className="h-3 w-3" />
+                              {list.assignedCampaigns?.length || 0}
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-600">
+                            {new Date(list.createdAt).toLocaleDateString()}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => {
+                                router.push(`/lead-lists/${list.id}`);
+                              }}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedList(list);
+                                setUploadDialogOpen(true);
+                              }}>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload Leads
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Download className="h-4 w-4 mr-2" />
+                                Export List
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditList(list)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit List
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => handleDeleteList(list.id, list.name)}
+                                disabled={isDeleting}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {isDeleting ? "Deleting..." : "Delete"}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t">
+                    <div className="text-sm text-gray-600">
+                      Showing {startIndex + 1} to {Math.min(endIndex, filteredLists?.length || 0)} of {filteredLists?.length || 0} results
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm px-3">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Edit Lead List Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Lead List</DialogTitle>
+              <DialogDescription>
+                Update the name and description of this lead list
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label>List Name</Label>
+                <Input
+                  placeholder="Enter list name"
+                  value={editListName}
+                  onChange={(e) => setEditListName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Description (Optional)</Label>
+                <Textarea
+                  placeholder="Enter list description"
+                  value={editListDescription}
+                  onChange={(e) => setEditListDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => {
+                  setEditDialogOpen(false);
+                  setSelectedList(null);
+                  setEditListName("");
+                  setEditListDescription("");
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateList} disabled={isEditing}>
+                  {isEditing ? "Updating..." : "Update List"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Upload CSV Dialog */}
+        <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Upload Leads to {selectedList?.name}</DialogTitle>
+              <DialogDescription>
+                Add leads to this list by uploading a CSV file
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label className="flex items-center gap-2 mb-2">
+                  <Upload className="h-4 w-4" />
+                  Select CSV File
+                </Label>
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // Validate file size (max 10MB)
+                      if (file.size > 10 * 1024 * 1024) {
+                        toast.error('File size must be less than 10MB');
+                        e.target.value = '';
+                        return;
+                      }
+                      // Validate file extension
+                      if (!file.name.toLowerCase().endsWith('.csv')) {
+                        toast.error('Please upload a CSV file');
+                        e.target.value = '';
+                        return;
+                      }
+                      setCsvFile(file);
+                      toast.success(`Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+                    }
+                  }}
+                  className="mt-1 cursor-pointer"
+                />
+                {csvFile && (
+                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-green-800">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        <div>
+                          <p className="font-medium">{csvFile.name}</p>
+                          <p className="text-xs text-green-600">{(csvFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCsvFile(null);
+                          toast.info('File removed');
+                        }}
+                        className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-100 transition-colors"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs font-semibold text-blue-900 mb-2">CSV Format Requirements:</p>
+                  <ul className="text-xs text-blue-800 space-y-1">
+                    <li>• <strong>phoneNumber</strong> (required) - Must include country code</li>
+                    <li>• <strong>name</strong> (optional) - Contact name</li>
+                    <li>• <strong>email</strong> (optional) - Contact email</li>
+                  </ul>
+                  <p className="text-xs text-blue-600 mt-2">Example: +1234567890, John Doe, john@example.com</p>
+                  <p className="text-xs text-blue-600 mt-1 font-medium">Max file size: 10MB</p>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => {
+                  setUploadDialogOpen(false);
+                  setCsvFile(null);
+                  setSelectedList(null);
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUploadCSV} disabled={isUploading || !csvFile}>
+                  {isUploading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Leads
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Leads Dialog */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Lead Details</DialogTitle>
+              <DialogDescription>
+                View and manage leads in this list
+              </DialogDescription>
+            </DialogHeader>
+            {listDetails?.leads && listDetails.leads.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Phone Number</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {listDetails.leads.map((lead: Lead) => (
+                    <TableRow key={lead.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <UserPlus className="h-3 w-3 text-gray-400" />
+                          {lead.name || "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-3 w-3 text-gray-400" />
+                          {lead.phoneNumber}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-3 w-3 text-gray-400" />
+                          {lead.email || "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          status={lead.status}
+                          type={
+                            lead.status === "PROCESSED" ? "success" :
+                            lead.status === "FAILED" ? "error" :
+                            "warning"
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {new Date(lead.createdAt).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No leads in this list</p>
+                <Button 
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={() => {
+                    setViewDialogOpen(false);
+                    setUploadDialogOpen(true);
+                  }}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Leads
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+        </div>
+      </div>
+    </>
+  );
+}
